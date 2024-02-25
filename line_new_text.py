@@ -32,9 +32,9 @@ vid = cv.VideoCapture(1)
 
 # This is the Publisher
 
-client = client_faker()
-# client = mqtt.Client(userdata="pc")
-# client.connect(server_ip, 1883)
+# client = client_faker()
+client = mqtt.Client(userdata="pc")
+client.connect(server_ip, 1883)
 
 cv.namedWindow("settings")
 cv.namedWindow("image")
@@ -105,6 +105,9 @@ def mouse_callback(event, x, y, *args):
         case ["cp"]:
             it.settings["cp"] = np.asarray((y, x))
             return
+        case ["exit"]:
+            it.settings["exit"] = np.asarray((y, x))
+            return
         case ["c"]:
             it.settings["yc"], it.settings["xc"] = y, x
             it.compute_circles()
@@ -143,132 +146,6 @@ while (key := cv.waitKey(10) & 0xFF) != ord("q"):
 
     with it.entry_loop(vid, bin_kwargs={"colors": it.settings["hsv"].keys()}) as l:
         pass
-
-
-def can(can_i):
-    can_center = it.settings["cans"][can_i]
-
-    caught = False
-    while not caught and it.tick("a"):
-        with it.entry_loop(vid) as l:
-            can_vect = can_center - l.centers["red"]
-            dist = np.linalg.norm(can_center - l.centers["purple"])
-            if l.robot_vect is None:
-                continue
-            angle = it.signed_angle(l.robot_vect, can_vect) * 100
-
-            if dist > 10 or dist < 4:
-                align_angle = it.min_max(int(angle), -30, 30)
-                # align_angle = it.min_max(int(angle), -MAX_STEER, MAX_STEER)
-                if abs(align_angle) > 3:
-                    client.publish("topic/steer-n-speed", f"{align_angle} 0")
-                else:
-                    speed = it.min_max(int((dist - 6) // 2), -20, 20)
-                    client.publish("topic/steer-n-speed", f"{align_angle} {speed}")
-            else:
-                client.publish("topic/steer-n-speed", "0 0")
-                cv.waitKey(500)
-                client.publish("topic/grabber", "catch")
-                cv.waitKey(5000)
-                caught = True
-
-
-cans = detect_cans()
-
-double_cans = None
-for i in range(6, -2, -1):
-    if cans[i] + cans[i + 1] == 2:
-        if i == -1:
-            double_cans = (7, 0)
-        double_cans = (i, i + 1)
-        break
-
-if double_cans is not None:
-    cans = [0 if i in double_cans else cans[i] for i in range(len(cans))]
-
-first_can = cans.index(1)
-second_can = cans.index(1, first_can + 1)
-
-client.publish("topic/grabber", "0")
-cv.waitKey(1000)
-
-print(f"{first_can = }")
-can(first_can)
-
-print(f"{second_can = }")
-can(second_can)
-
-done = False
-while not done and it.tick("a"):
-    with it.entry_loop(vid) as l:
-        zero_pointer = it.zero_point() - l.centers["red"]
-        dist = np.linalg.norm(zero_pointer)
-        if l.robot_vect is None:
-            continue
-        angle = it.signed_angle(l.robot_vect, zero_pointer) * 100
-
-        if dist > 5:
-            align_angle = it.min_max(int(angle), -30, 30)
-            # align_angle = it.min_max(int(angle), -MAX_STEER, MAX_STEER)
-            if abs(align_angle) > 3:
-                client.publish("topic/steer-n-speed", f"{align_angle} 0")
-            else:
-                client.publish("topic/steer-n-speed", f"{align_angle} 10")
-        else:
-            done = True
-
-cv.waitKey(1000)
-
-if double_cans is not None:
-    first_can, second_can = double_cans
-else:
-    first_can = cans.index(1, second_can + 1)
-    second_can = cans.index(1, first_can + 1)
-
-done = False
-timer = time.time()
-while not done and it.tick("a"):
-    with it.entry_loop(vid) as l:
-        can_pointer = it.settings["cans"][first_can] - l.centers["red"]
-        if l.robot_vect is None:
-            continue
-        angle = it.signed_angle(-l.robot_vect, can_pointer) * 100
-
-        align_angle = it.min_max(int(angle), -30, 30)
-        if abs(align_angle) > 3 or time.time() - timer < 3:
-            client.publish("topic/steer-n-speed", f"{align_angle} 0")
-        else:
-            client.publish("topic/steer-n-speed", "0 0")
-            done = True
-cv.waitKey(1000)
-
-client.publish("topic/grabber", "0")
-cv.waitKey(1000)
-client.publish("topic/steer-n-speed", "0 -10")
-cv.waitKey(1000)
-
-can(first_can)
-can(second_can)
-
-done = False
-while not done and it.tick("a"):
-    with it.entry_loop(vid) as l:
-        zero_pointer = it.zero_point() - l.centers["purple"]
-        dist = np.linalg.norm(zero_pointer)
-        if l.robot_vect is None:
-            continue
-        angle = it.signed_angle(l.robot_vect, zero_pointer) * 100
-
-        if dist > 7:
-            align_angle = it.min_max(int(angle), -30, 30)
-            # align_angle = it.min_max(int(angle), -MAX_STEER, MAX_STEER)
-            if abs(align_angle) > 3:
-                client.publish("topic/steer-n-speed", f"{align_angle} 0")
-            else:
-                client.publish("topic/steer-n-speed", f"{align_angle} 10")
-        else:
-            client.publish("topic/steer-n-speed", "0 0")
-            done = True
 
 center_point = lambda im: np.array(im.shape[:2][::-1]) // 2
 # 9 cm - 23 cm
@@ -405,4 +282,3 @@ client.publish("topic/grabber", "0")
 it.dump()
 cv.waitKey(100)
 # client.disconnect()
-
