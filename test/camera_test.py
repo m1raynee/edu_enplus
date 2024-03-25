@@ -1,6 +1,6 @@
 import cv2
 
-vid = cv2.VideoCapture(1)  # подключение камеры
+vid = cv2.VideoCapture(2)  # подключение камеры
 
 while True:  # simple loop
     if cv2.waitKey(10) == 27:
@@ -11,8 +11,5 @@ while True:  # simple loop
 
 cv2.imwrite("saved.png", img)
 
-cv2.waitKey()
-
 vid.release()
-
 cv2.destroyAllWindows()

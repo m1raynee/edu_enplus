@@ -1,6 +1,6 @@
 from paho.mqtt.client import Client
 try:
-    from .._ip import server_ip
+    from ._ip import server_ip
 except:
     server_ip = "192.168.65.177"
 

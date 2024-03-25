@@ -144,7 +144,16 @@ class ImageToolbox:
     ):
         return {
             k: (
-                self.chain.add(self.bin(name=k)).add(
+                (
+                    self.chain.add(self.bin(name=k)).add(
+                        partial(
+                            cv.erode,
+                            kernel=cv.getStructuringElement(cv.MORPH_RECT, (2, 2)),
+                        )
+                    )
+                    if k == "purple"
+                    else self.chain.add(self.bin(name=k))
+                ).add(
                     partial(
                         cv.dilate,
                         kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)),
@@ -159,7 +168,10 @@ class ImageToolbox:
     def zero_point(self):
         return np.asarray((self.settings["xc"], self.settings["yc"]))
 
-    def centers(self, bins):
+    def as_int(self, array):
+        return np.array([int(i) for i in array])
+
+    def centers(self, bins, *, perspective_correction=True, zero_point=None):
         centers: dict[str, np.ndarray] = {}
         for name, bin_ in bins.items():
             M = cv.moments(bin_)
@@ -168,8 +180,26 @@ class ImageToolbox:
                 centers[name] = cnt
                 img_ = cv.cvtColor(bin_, cv.COLOR_GRAY2BGR)
                 bin_ = cv.circle(img_, cnt, 10, (0, 0, 255))
+                
+                if perspective_correction:
+                    if zero_point is None:
+                        zero_point = np.array([self.settings["x1"], self.settings["y1"]])
+                    C = np.array([160,120]) - zero_point
+                    A = centers[name]
+                    k = None
+                    if name in ("red", "purple"):
+                        k = self.settings["h_r"]/self.settings["H"]
+                    if name in ("green", "yellow"):
+                        k = self.settings["h_c"]/self.settings["H"]
+                    if k:
+                        centers[name] = self.as_int(
+                            A + k*(C-A)
+                        )
+                        bin_ = cv.circle(img_, centers[name], 10, (0, 255, 0))
             else:
                 centers[name] = np.asarray((0, 0))
+
+
             cv.imshow(f"{name}_bin", bin_)
         return centers
 
