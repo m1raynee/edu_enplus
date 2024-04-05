@@ -171,36 +171,37 @@ class ImageToolbox:
     def as_int(self, array):
         return np.array([int(i) for i in array])
 
-    def centers(self, bins, *, perspective_correction=True, zero_point=None):
+    def centers(self, bins, *, perspective_correction=True, zero_point=None, draw=True):
         centers: dict[str, np.ndarray] = {}
         for name, bin_ in bins.items():
             M = cv.moments(bin_)
             if M["m00"] != 0.0:
                 cnt = self.M_point(M)
                 centers[name] = cnt
-                img_ = cv.cvtColor(bin_, cv.COLOR_GRAY2BGR)
-                bin_ = cv.circle(img_, cnt, 10, (0, 0, 255))
-                
+                if draw:
+                    img_ = cv.cvtColor(bin_, cv.COLOR_GRAY2BGR)
+                    bin_ = cv.circle(img_, cnt, 10, (0, 0, 255))
+
                 if perspective_correction:
                     if zero_point is None:
-                        zero_point = np.array([self.settings["x1"], self.settings["y1"]])
-                    C = np.array([160,120]) - zero_point
+                        zero_point = np.array(
+                            [self.settings["x1"], self.settings["y1"]]
+                        )
+                    C = np.array([160, 120]) - zero_point
                     A = centers[name]
                     k = None
                     if name in ("red", "purple"):
-                        k = self.settings["h_r"]/self.settings["H"]
+                        k = self.settings["h_r"] / self.settings["H"]
                     if name in ("green", "yellow"):
-                        k = self.settings["h_c"]/self.settings["H"]
+                        k = self.settings["h_c"] / self.settings["H"]
                     if k:
-                        centers[name] = self.as_int(
-                            A + k*(C-A)
-                        )
-                        bin_ = cv.circle(img_, centers[name], 10, (0, 255, 0))
+                        centers[name] = self.as_int(A + k * (C - A))
+                        if draw:
+                            bin_ = cv.circle(img_, centers[name], 10, (0, 255, 0))
             else:
                 centers[name] = np.asarray((0, 0))
-
-
-            cv.imshow(f"{name}_bin", bin_)
+            if draw:
+                cv.imshow(f"{name}_bin", bin_)
         return centers
 
     @staticmethod
@@ -248,33 +249,35 @@ class ImageToolbox:
         """
         return np.arctan2(np.linalg.det([v1, v2]), np.dot(v1, v2)) / np.pi
 
-    def compute_circles(self):
-        center = np.asarray((float(self.settings["xc"]), float(self.settings["yc"])))
-        r = self.settings["r"]
-        rt2 = 2.0**0.5 / 2
-        vects = np.array(
-            [
-                [0.0, -1.0],
-                [rt2, -rt2],
-                [1.0, 0.0],
-                [rt2, rt2],
-                [0.0, 1.0],
-                [-rt2, rt2],
-                [-1.0, 0.0],
-                [-rt2, -rt2],
-            ]
-        )
-        for i, vec in enumerate(vects):
-            cnt = (vec * r + center).astype(int)
-            self.settings["cans"][i] = cnt
-
     def draw_bounds(self, img: Mat) -> Mat:
         for i, cnt in enumerate(self.settings["cans"]):
             if cnt is None:
                 continue
             img = cv.circle(img, cnt, 10, (255, 0, 0))
-            img = cv.putText(img, f"{i}", cnt, cv.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255))
+            img = cv.putText(img, f"{i}", cnt, cv.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0))
         img = cv.circle(img, self.settings["ctr"][::-1], 10, (255, 0, 0))
+        img = cv.circle(img, self.settings["align_center"], 10, (0, 255, 255))
+        for key in ("left_start", "right_start"):
+            img = cv.rectangle(
+                img,
+                (
+                    self.settings[key][0] - self.settings["r_start"],
+                    self.settings[key][1] - self.settings["r_start"],
+                ),
+                (
+                    self.settings[key][0] + self.settings["r_start"],
+                    self.settings[key][1] + self.settings["r_start"],
+                ),
+                (0, 255, 0),
+            )
+            img = cv.putText(
+                img,
+                key[:-6],
+                self.settings[key],
+                cv.FONT_HERSHEY_COMPLEX,
+                1,
+                (255, 0, 0),
+            )
         # img = cv.rectangle(img, self.settings["exit"]-5, self.settings["exit"]+5, (255, 255, 0))
 
         return img
@@ -389,7 +392,7 @@ class ImageToolbox:
         return Chain(self)
 
     def tick(self, exit_char: str) -> bool:
-        return (cv.waitKey(50) & 0xFF) != ord(exit_char)
+        return (cv.waitKey(40) & 0xFF) != ord(exit_char)
 
     def entry_loop(
         self,

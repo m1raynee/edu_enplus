@@ -32,7 +32,7 @@ def on_connect(*args):
 
 client.on_connect = on_connect
 
-
+n = 0
 def on_message(client: Client, userdata: str, message: MQTTMessage):
     text = message.payload.decode()
     topic = message.topic
@@ -53,13 +53,19 @@ def on_message(client: Client, userdata: str, message: MQTTMessage):
         msteer.on(int(steer), SpeedPercent(int(speed)))
     if topic == "topic/grabber":
         if text == "catch":  # grab
+            global n
+            n += 1
+            msteer.on_for_degrees(0, SpeedPercent(-10), 100)
+            if n % 3 == 0:
+                msteer.on_for_degrees(-100, SpeedPercent(10), 40)
+            else:
+                msteer.on_for_degrees(100, SpeedPercent(10), 40)
             grabber.on_for_seconds(20, 0.5)
-            sleep(1)
-            msteer.on_for_degrees(0, SpeedPercent(10), 200)
-            sleep(1)
+            msteer.on_for_degrees(0, SpeedPercent(20), 350)
             grabber.on_for_seconds(-20, 0.5)
         elif text == "0":  # release
             grabber.on_for_seconds(20, 0.5, brake=False)
+
 
 client.on_message = on_message
 
