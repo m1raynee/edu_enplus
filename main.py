@@ -114,7 +114,7 @@ last_angle = -1
 
 def seek(goal, to_purple=False):
     dist = 100
-    while dist > 18 and it.tick("z"):
+    while dist > 21 and it.tick("z"):
         with it.entry_loop(vid, bin_kwargs={"colors": robot}) as l:
             if l.robot_vect is None:
                 continue
@@ -124,18 +124,18 @@ def seek(goal, to_purple=False):
                 can_vect = goal - l.centers["red"]
             dist = np.linalg.norm(can_vect)
 
-            angle = it.signed_angle(l.robot_vect, can_vect) * 20
+            angle = it.signed_angle(l.robot_vect, can_vect) * 40
 
             align_angle = int(angle)
             if abs(align_angle) > 3:
                 client.publish("topic/steer-n-speed", f"{align_angle} 0")
             else:
-                client.publish("topic/steer-n-speed", f"{align_angle*10} 20")
+                client.publish("topic/steer-n-speed", f"{align_angle*10} 30")
     client.publish("topic/steer-n-speed", "0 0")
 
 def release(back=True):
     client.publish("topic/steer-n-speed", "0 20")
-    cv.waitKey(500)
+    cv.waitKey(750)
     client.publish("topic/steer-n-speed", "0 0")
     client.publish("topic/grabber", "0")
     cv.waitKey(600)
@@ -293,18 +293,23 @@ def main():
                 )
                 angle = it.min_max(int(diff * 2), -100, 100)
                 last_angle = np.sign(angle)
-                print(angle)
-                client.publish("topic/steer-n-speed", f"{angle} 20")
+                client.publish("topic/steer-n-speed", f"{angle} 30")
             else:
                 # доворот в сторону, где была линия
-                client.publish("topic/steer-n-speed", f"{10*last_angle} 0")
+                client.publish("topic/steer-n-speed", f"{20*last_angle} 0")
 
             cv.imshow("rot", rot)
 
     # небольшой проезд до финиша  
+    # client.publish("topic/steer-n-speed", "0 20")
+    # cv.waitKey(2000)
+    # client.publish("topic/steer-n-speed", "0 0")
+    seek(it.settings[finish])
     client.publish("topic/steer-n-speed", "0 20")
-    cv.waitKey(1000)
+    cv.waitKey(750)
     client.publish("topic/steer-n-speed", "0 0")
+
+
 
     seek(it.settings["align_center"])
     do_strategy(strategy, dom_name)
@@ -320,13 +325,27 @@ def main():
         strategy = strategy[::-1]
 
     do_strategy(strategy, rec_name)
+    seek(it.settings["align_center"])
     
     seek(it.settings[finish if dominant == "g" else start], True)
-    release(dominant == "y")
+    release()
 
-    if dominant == "y":
-        seek(it.settings[finish], True)
-        cv.waitKey(100)
+    client.publish("topic/steer-n-speed", "0 -20")
+    cv.waitKey(750)
+    client.publish("topic/steer-n-speed", "0 0")
+
+    seek(it.settings["cube"])
+    seek(it.settings[start if dominant == "g" else finish])
+
+    if (finish if dominant == "g" else start) == "left_start":
+        final = cans_types.index("y")
+    else:
+        final = len(cans_types) - 1 - cans_types[::-1].index("y")
+    
+    client.publish("topic/steer-n-speed", "0 -20")
+    cv.waitKey(1000)
+
+    seek(it.settings["cans"][final])
 
 class Init:
     def __enter__(self):
@@ -334,6 +353,7 @@ class Init:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         client.publish("topic/steer-n-speed", "0 0")
+        cv.waitKey(100)
 
 if __name__ == "__main__":
     with Init() as init:

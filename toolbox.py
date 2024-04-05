@@ -257,6 +257,7 @@ class ImageToolbox:
             img = cv.putText(img, f"{i}", cnt, cv.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0))
         img = cv.circle(img, self.settings["ctr"][::-1], 10, (255, 0, 0))
         img = cv.circle(img, self.settings["align_center"], 10, (0, 255, 255))
+        img = cv.circle(img, self.settings["cube"], 10, (255, 255, 255))
         for key in ("left_start", "right_start"):
             img = cv.rectangle(
                 img,
