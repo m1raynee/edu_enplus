@@ -55,14 +55,15 @@ def on_message(client: Client, userdata: str, message: MQTTMessage):
         if text == "catch":  # grab
             global n
             n += 1
-            msteer.on_for_degrees(0, SpeedPercent(-10), 100)
-            if n % 3 == 0:
+            msteer.on_for_degrees(0, SpeedPercent(-10), 50)
+            if n % 3 == 0: 
                 msteer.on_for_degrees(-100, SpeedPercent(10), 40)
             else:
                 msteer.on_for_degrees(100, SpeedPercent(10), 40)
             grabber.on_for_seconds(20, 0.5)
             msteer.on_for_degrees(0, SpeedPercent(20), 350)
             grabber.on_for_seconds(-20, 0.5)
+            msteer.on_for_degrees(0, SpeedPercent(-10), 150)
         elif text == "0":  # release
             grabber.on_for_seconds(20, 0.5, brake=False)
 

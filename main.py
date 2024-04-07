@@ -114,23 +114,26 @@ last_angle = -1
 
 def seek(goal, to_purple=False):
     dist = 100
-    while dist > 21 and it.tick("z"):
+    while dist > 16 and it.tick("z"):
         with it.entry_loop(vid, bin_kwargs={"colors": robot}) as l:
             if l.robot_vect is None:
+                client.publish("topic/steer-n-speed", "0 -10")
                 continue
             if to_purple:
-                can_vect = goal - l.centers["purple"]
+                dist_vect = goal - l.centers["purple"]
             else:
-                can_vect = goal - l.centers["red"]
-            dist = np.linalg.norm(can_vect)
+                dist_vect = goal - l.centers["red"]
+            can_vect = goal - l.centers["red"]
+            dist = np.linalg.norm(dist_vect)
 
-            angle = it.signed_angle(l.robot_vect, can_vect) * 40
+            angle = it.signed_angle(l.robot_vect, can_vect) * 20
 
             align_angle = int(angle)
             if abs(align_angle) > 3:
                 client.publish("topic/steer-n-speed", f"{align_angle} 0")
             else:
-                client.publish("topic/steer-n-speed", f"{align_angle*10} 30")
+                client.publish("topic/steer-n-speed", f"{align_angle*10} 15")
+
     client.publish("topic/steer-n-speed", "0 0")
 
 def release(back=True):
@@ -168,6 +171,43 @@ def do_strategy(strategy, color_name):
         seek(goal, True)
         client.publish("topic/grabber", "catch")
         cv.waitKey(3000)
+
+        tries = 0
+        while tries < 3:
+            tries += 1
+            with it.entry_loop(vid, bin_kwargs={"colors": cans}, skip_centers=cans) as l:
+                cnts, h = cv.findContours(
+                    l.bins[color_name], cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE
+                )
+                
+                dists = []
+                centers = []
+                for c in cnts:
+                    center = it.centers({color_name: c}, draw=False)[color_name]
+                    dists.append(np.linalg.norm(center - it.settings["cans"][can_index]))
+                    centers.append(center)
+
+                if len(dists) == 0:
+                    tries = 3
+                    print("NO CONTOURS")
+                    continue
+                
+                min_dist_index = dists.index(min(dists))
+                if min(dists) > 45:
+                    tries = 3
+                    print("TOO FAR TO RETRY")
+                    continue
+                
+                print("RETRY")
+                print(dists)
+                print(centers)
+
+                goal = centers[min_dist_index]
+                print(goal)
+
+                seek(goal, True)
+                client.publish("topic/grabber", "catch")
+                cv.waitKey(3000)
 
 def main():
     # ожидание начала первоначального сканирования
@@ -293,7 +333,7 @@ def main():
                 )
                 angle = it.min_max(int(diff * 2), -100, 100)
                 last_angle = np.sign(angle)
-                client.publish("topic/steer-n-speed", f"{angle} 30")
+                client.publish("topic/steer-n-speed", f"{angle} 20")
             else:
                 # доворот в сторону, где была линия
                 client.publish("topic/steer-n-speed", f"{20*last_angle} 0")
@@ -352,8 +392,10 @@ class Init:
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
+        client.publish("topic/steer-n-speed", "Q")
+        cv.waitKey(250)
         client.publish("topic/steer-n-speed", "0 0")
-        cv.waitKey(100)
+        cv.waitKey(500)
 
 if __name__ == "__main__":
     with Init() as init:
