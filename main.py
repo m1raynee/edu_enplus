@@ -346,7 +346,7 @@ def main():
     # client.publish("topic/steer-n-speed", "0 0")
     seek(it.settings[finish])
     client.publish("topic/steer-n-speed", "0 20")
-    cv.waitKey(750)
+    cv.waitKey(1000)
     client.publish("topic/steer-n-speed", "0 0")
 
 
@@ -371,7 +371,7 @@ def main():
     release()
 
     client.publish("topic/steer-n-speed", "0 -20")
-    cv.waitKey(750)
+    cv.waitKey(1000)
     client.publish("topic/steer-n-speed", "0 0")
 
     seek(it.settings["cube"])
@@ -385,6 +385,7 @@ def main():
     client.publish("topic/steer-n-speed", "0 -20")
     cv.waitKey(1000)
 
+    seek(it.settings["align_center"])
     seek(it.settings["cans"][final])
 
 class Init:
