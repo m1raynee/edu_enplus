@@ -1,4 +1,5 @@
 numpy
 opencv-python
+python-ev3dev2
 imutils
 paho-mqtt

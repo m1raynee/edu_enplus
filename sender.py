@@ -1,12 +1,12 @@
 from paho.mqtt.client import Client
 try:
-    from ._ip import server_ip
+    from .config import mqtt_server_ip
 except:
-    server_ip = "192.168.65.177"
+    mqtt_server_ip = "192.168.65.177"
 
 
 client = Client()
-client.connect(server_ip)
+client.connect(mqtt_server_ip)
 
 while True:
     msg = input()
