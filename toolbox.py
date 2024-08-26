@@ -118,7 +118,8 @@ class Loop:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         cv.imshow("image", self.image.img)
-        cv.imshow("transformed", self.image.defaulted)
+        transformed = self.toolbox.draw_bounds(self.image.defaulted)
+        cv.imshow("transformed", transformed)
 
 
 class ImageToolbox:
@@ -251,36 +252,8 @@ class ImageToolbox:
         return np.arctan2(np.linalg.det([v1, v2]), np.dot(v1, v2)) / np.pi
 
     def draw_bounds(self, img: Mat) -> Mat:
-        for i, cnt in enumerate(self.settings["cans"]):
-            if cnt is None:
-                continue
-            img = cv.circle(img, cnt, 10, (255, 0, 0))
-            img = cv.putText(img, f"{i}", cnt, cv.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0))
-        img = cv.circle(img, self.settings["ctr"][::-1], 10, (255, 0, 0))
-        img = cv.circle(img, self.settings["align_center"], 10, (0, 255, 255))
-        img = cv.circle(img, self.settings["cube"], 10, (255, 255, 255))
-        for key in ("left_start", "right_start"):
-            img = cv.rectangle(
-                img,
-                (
-                    self.settings[key][0] - self.settings["r_start"],
-                    self.settings[key][1] - self.settings["r_start"],
-                ),
-                (
-                    self.settings[key][0] + self.settings["r_start"],
-                    self.settings[key][1] + self.settings["r_start"],
-                ),
-                (0, 255, 0),
-            )
-            img = cv.putText(
-                img,
-                key[:-6],
-                self.settings[key],
-                cv.FONT_HERSHEY_COMPLEX,
-                1,
-                (255, 0, 0),
-            )
-        # img = cv.rectangle(img, self.settings["exit"]-5, self.settings["exit"]+5, (255, 255, 0))
+        cv.rectangle(img, (self.settings["l_brd"], 0), (self.settings["l_brd"], img.shape[1]), (255, 255, 0), 2)
+        cv.rectangle(img, (self.settings["r_brd"], 0), (self.settings["r_brd"], img.shape[1]), (255, 255, 0), 2)
 
         return img
 
@@ -369,8 +342,8 @@ class ImageToolbox:
         """Returns `Chain` object with current `settings` presets."""
         return Chain(self)
 
-    def tick(self, exit_char: str) -> bool:
-        return (cv.waitKey(30) & 0xFF) != ord(exit_char)
+    def tick(self, exit_char: str, time:int = 30) -> bool:
+        return (cv.waitKey(time) & 0xFF) != ord(exit_char)
 
     def entry_loop(
         self,

@@ -66,7 +66,7 @@ def on_message(client: Client, userdata: str, message: MQTTMessage):
             diff = max(min((ang - mA.degrees)//2, 100), -100)
             mA.on(SpeedPercent(diff))
             mD.on(SpeedPercent(-diff))
-        
+
         mA.on(SpeedPercent(0))
         mD.on(SpeedPercent(0))
 
