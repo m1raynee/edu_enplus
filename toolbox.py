@@ -68,6 +68,21 @@ class Chain:
                 raise ChainException(e, n, func) from e
         return im
 
+class IterationImage:
+    def __init__(self, img, defaulted, bins, centers) -> None:
+        self.img: Mat = img
+        self.defaulted: Mat = defaulted
+        self.bins: dict[str, Mat] = bins
+        self.centers: dict[str, Mat] = centers
+
+    @property
+    def robot_vect(self) -> np.ndarray | None:
+        if not (self.centers["red"].all() and self.centers["purple"].all()):
+            print("unable to calc robot vect")
+            return
+
+        return self.centers["purple"] - self.centers["red"]
+
 
 class Loop:
     def __init__(
@@ -82,39 +97,28 @@ class Loop:
         self.bin_kwargs = bin_kwargs or {}
         self.skip_centers = skip_centers
 
-        self.defaulted: Mat | None = None
-        self.bins: dict[str, Mat] | None = None
-        self.centers: dict[str, Mat] | None = None
-
-    def __enter__(self) -> t.Self:
-        ret, self.img = self.video_source.read()
-        self.defaulted = self.toolbox.default_chain.call(self.img)
-        self.bins = self.toolbox.bins(self.defaulted, **self.bin_kwargs)
+    def __enter__(self) -> IterationImage:
+        ret, img = self.video_source.read()
+        defaulted = self.toolbox.default_chain.call(img)
+        bins = self.toolbox.bins(defaulted, **self.bin_kwargs)
         if self.skip_centers:
             if isinstance(self.skip_centers, t.Iterable):
-                self.centers = self.toolbox.centers(
+                centers = self.toolbox.centers(
                     {
                         k: bin_
-                        for k, bin_ in self.bins.items()
+                        for k, bin_ in bins.items()
                         if k not in self.skip_centers
                     }
                 )
         else:
-            self.centers = self.toolbox.centers(self.bins)
+            centers = self.toolbox.centers(bins)
 
-        return self
+        self.image = IterationImage(img, defaulted, bins, centers)
+        return self.image
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        cv.imshow("image", self.toolbox.rotate(self.img))
-        cv.imshow("transformed", self.toolbox.draw_bounds(self.defaulted))
-
-    @property
-    def robot_vect(self) -> np.ndarray | None:
-        if not (self.centers["red"].all() and self.centers["purple"].all()):
-            print("unable to calc robot vect")
-            return
-
-        return self.centers["purple"] - self.centers["red"]
+        cv.imshow("image", self.image.img)
+        cv.imshow("transformed", self.image.defaulted)
 
 
 class ImageToolbox:
@@ -123,24 +127,21 @@ class ImageToolbox:
         self.settings = {
             "x1": 0,
             "y1": 0,
-            "x2": 640 // 2,
-            "y2": 480 // 2,
-            "xc": 0,
-            "yc": 0,
-            "r": 0,
-            "angle": 0,
-            "hsv": {},
-            "cans": [None] * 8,
         }
         self.can_type = "green"
         self.settings.update(kwargs)
+
+        self._default_chain = (
+            self.chain.add(self.resize)
+            .add(partial(cv.cvtColor, code=cv.COLOR_BGR2HSV))
+        )
 
     def bins(
         self,
         defaulted,
         *,
-        colors=("red", "purple"),
-        to_dilate=("purple", "green", "yellow"),
+        colors=("red", "yellow",),
+        to_dilate=("red",),
     ):
         return {
             k: (
@@ -148,7 +149,7 @@ class ImageToolbox:
                     self.chain.add(self.bin(name=k)).add(
                         partial(
                             cv.erode,
-                            kernel=cv.getStructuringElement(cv.MORPH_RECT, (2, 2)),
+                            kernel=cv.getStructuringElement(cv.MORPH_RECT, (7, 7)),
                         )
                     )
                     if k == "purple"
@@ -168,7 +169,7 @@ class ImageToolbox:
     def zero_point(self):
         return np.asarray((self.settings["xc"], self.settings["yc"]))
 
-    def as_int(self, array):
+    def as_int_array(self, array):
         return np.array([int(i) for i in array])
 
     def centers(self, bins, *, perspective_correction=True, zero_point=None, draw=True):
@@ -187,15 +188,15 @@ class ImageToolbox:
                         zero_point = np.array(
                             [self.settings["x1"], self.settings["y1"]]
                         )
-                    C = np.array([160, 120]) - zero_point
+                    C = self.as_int_array(bin_.shape[:2][::-1])//2 - zero_point
                     A = centers[name]
                     k = None
-                    if name in ("red", "purple"):
+                    if name in ("yellow",):
                         k = self.settings["h_r"] / self.settings["H"]
-                    if name in ("green", "yellow"):
+                    if name in ("red",):
                         k = self.settings["h_c"] / self.settings["H"]
                     if k:
-                        centers[name] = self.as_int(A + k * (C - A))
+                        centers[name] = self.as_int_array(A + k * (C - A))
                         if draw:
                             bin_ = cv.circle(img_, centers[name], 10, (0, 255, 0))
             else:
@@ -329,32 +330,7 @@ class ImageToolbox:
             center[0] - r : center[0] + r,
         ]
 
-    def crop(
-        self,
-        im: Mat,
-        x1: int | None = None,
-        x2: int | None = None,
-        y1: int | None = None,
-        y2: int | None = None,
-    ) -> Mat:
-        """Crops the image `im` by upper left point `(x1, y1)`
-        and bottom-right point `(x2, y2)`. Chainable.
-
-        Uses inner `settings` presets if points weren't passed"""
-        y1 = y1 or self.settings["y1"]
-        y2 = y2 or self.settings["y2"]
-        x1 = x1 or self.settings["x1"]
-        x2 = x2 or self.settings["x2"]
-        return im[y1:y2, x1:x2]
-
-    def rotate(self, im: Mat, angle: int | None = None) -> Mat:
-        """Rotates the image `im` by an `angle`. Chainable.
-
-        Uses inner `settings` presets if rotation angle weren't passed"""
-        angle = angle or self.settings["angle"]
-        return imu.rotate(im, angle)
-
-    def resize(self, im: Mat, factor: int = 2) -> Mat:
+    def resize(self, im: Mat, factor: int = 4) -> Mat:
         """Scale down the image `im` by a `factor`. Chainable."""
         return cv.resize(im, (im.shape[1] // factor, im.shape[0] // factor))
 
@@ -378,14 +354,15 @@ class ImageToolbox:
         """Wraps `ImageToolbox.to_binary` to make it chainable."""
         return partial(self.to_binary, name=name, masks=masks)
 
+    
+
     @property
     def default_chain(self) -> Chain:
-        return (
-            self.chain.add(self.resize)
-            .add(self.rotate)
-            .add(self.crop)
-            .add(partial(cv.cvtColor, code=cv.COLOR_BGR2HSV))
-        )
+        return self._default_chain
+    
+    @default_chain.setter
+    def default_chain(self, chain):
+        self._default_chain = chain
 
     @property
     def chain(self) -> Chain:
@@ -393,7 +370,7 @@ class ImageToolbox:
         return Chain(self)
 
     def tick(self, exit_char: str) -> bool:
-        return (cv.waitKey(40) & 0xFF) != ord(exit_char)
+        return (cv.waitKey(30) & 0xFF) != ord(exit_char)
 
     def entry_loop(
         self,

@@ -5,68 +5,72 @@ from ev3dev2.motor import (
     OUTPUT_A,
     OUTPUT_B,
     OUTPUT_C,
+    OUTPUT_D,
     MediumMotor,
+    LargeMotor,
     SpeedPercent,
     MoveSteering,
 )
 
-grabber = MediumMotor(OUTPUT_A)  # init of Grabber's motor
 
 # Init of Steering motors (B - left, C - right medium motors).
-# We'd like to inverse left motor polarity 'cause it's facing different direction.
-msteer = MoveSteering(OUTPUT_B, OUTPUT_C, motor_class=MediumMotor)
-msteer.set_polarity(MediumMotor.POLARITY_INVERSED, (msteer.left_motor,))
-
-
+msteer = MoveSteering(OUTPUT_B, OUTPUT_C, motor_class=LargeMotor)
+mA = MediumMotor(OUTPUT_A)
+mD = MediumMotor(OUTPUT_D)
+mA.reset()
 # Init of MQTT client, brick is our broker so 172.0.0.1 is the way.
 client = Client("brick")
 client.connect("127.0.0.1", 1883, 10)
 
 
+ang = 0
 def on_connect(*args):
+    global ang
     print("Connected!")
-    client.subscribe("topic/steer-n-speed")
-    client.subscribe("topic/grabber")
+    client.subscribe("topic/speed")
     client.subscribe("topic/movements")
 
 
 client.on_connect = on_connect
 
-n = 0
 def on_message(client: Client, userdata: str, message: MQTTMessage):
+    speed = 0
+    global ang
+
     text = message.payload.decode()
     topic = message.topic
 
-    print(topic, text)
+    print(topic, text, mA.degrees)
 
     if text == "Q":
         msteer.off()
         client.disconnect()
         return
 
-    if topic == "topic/steer-n-speed":
-        steer, speed = text.split()
-        if speed == "0":
-            msteer.left_motor.on(SpeedPercent(int(steer)))
-            msteer.right_motor.on(SpeedPercent(-int(steer)))
-            return
-        msteer.on(int(steer), SpeedPercent(int(speed)))
-    if topic == "topic/grabber":
-        if text == "catch":  # grab
-            global n
-            n += 1
-            msteer.on_for_degrees(0, SpeedPercent(-10), 50)
-            if n % 3 == 0: 
-                msteer.on_for_degrees(-100, SpeedPercent(10), 40)
-            else:
-                msteer.on_for_degrees(100, SpeedPercent(10), 40)
-            grabber.on_for_seconds(20, 0.5)
-            msteer.on_for_degrees(0, SpeedPercent(20), 350)
-            grabber.on_for_seconds(-20, 0.5)
-            msteer.on_for_degrees(0, SpeedPercent(-10), 150)
-        elif text == "0":  # release
-            grabber.on_for_seconds(20, 0.5, brake=False)
+    if topic == "topic/speed":
+        speed = int(text)
 
+    if topic == "topic/movements":
+        ang = 90
+
+        msteer.on(100, SpeedPercent(0))
+
+        while mA.degrees < 50:
+            diff = max(min((ang - mA.degrees)//2, 100), -100)
+            mA.on(SpeedPercent(diff))
+            mD.on(SpeedPercent(-diff))
+
+        ang = -15
+
+        while mA.degrees > -5:
+            diff = max(min((ang - mA.degrees)//2, 100), -100)
+            mA.on(SpeedPercent(diff))
+            mD.on(SpeedPercent(-diff))
+        
+        mA.on(SpeedPercent(0))
+        mD.on(SpeedPercent(0))
+
+    msteer.on(100, SpeedPercent(speed))
 
 client.on_message = on_message
 
