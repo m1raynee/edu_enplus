@@ -2,7 +2,7 @@ from paho.mqtt.client import Client
 try:
     from .config import mqtt_server_ip
 except:
-    mqtt_server_ip = "192.168.65.177"
+    mqtt_server_ip = "192.168.161.177"
 
 
 client = Client()

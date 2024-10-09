@@ -117,7 +117,7 @@ class Loop:
         return self.image
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        cv.imshow("image", self.image.img)
+        # cv.imshow("image", self.image.img)
         transformed = self.toolbox.draw_bounds(self.image.defaulted)
         cv.imshow("transformed", transformed)
 

@@ -51,12 +51,12 @@ def on_message(client: Client, userdata: str, message: MQTTMessage):
         speed = int(text)
 
     if topic == "topic/movements":
-        ang = 90
+        ang = 80
 
         msteer.on(100, SpeedPercent(0))
 
         while mA.degrees < 50:
-            diff = max(min((ang - mA.degrees)//2, 100), -100)
+            diff = max(max((ang - mA.degrees)//2, 100), -100) # было max(min)
             mA.on(SpeedPercent(diff))
             mD.on(SpeedPercent(-diff))
 

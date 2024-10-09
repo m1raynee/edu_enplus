@@ -1,5 +1,4 @@
 import time
-import queue
 
 import cv2 as cv
 import numpy as np
@@ -50,13 +49,14 @@ cv.setMouseCallback("transformed", mouse_callback)
 
 def main():
     print("Connecting to a server")
-    # client = mqtt.Client(userdata="pc")
-    # client.connect(mqtt_server_ip, 1883)
+    client = mqtt.Client(userdata="pc")
+    client.connect(mqtt_server_ip, 1883)
     print("Connected")
 
     last_command = ("", "")
     kick_timer = 0
-    pole_movement_k = 1.5
+    stepcount = 0
+    pole_movement_k = 1.5       # было 1.5
     memory = []
 
     while it.tick("q", 40):
@@ -66,8 +66,9 @@ def main():
             else:
                 memory.append(img.centers["red"])
                 velocity = it.settings["render"]["vel"] = memory[-1] - memory[0]
+                
 
-                if velocity[1] <= 0:
+                if velocity[1] <= 20:      
                     d_x = img.centers["yellow"][0] - img.centers["red"][0]
                     diff = d_x * pole_movement_k
                     diff = np.sign(diff) * min(abs(diff), 100)
@@ -77,10 +78,13 @@ def main():
                     start = img.centers["red"]
                     step = start + velocity
                     circled_img = it.draw_bounds(img.defaulted)
+                    stepcount = 0
                     for i in range(100):
                         step += velocity
+                        stepcount += 1
                         if step[1] > 216:
                             circled_img = cv.circle(circled_img, step, 3, (255, 255, 255), -1)
+                            # step - примерная координата столкновения с шаром
                             break
 
                         circled_img = cv.circle(circled_img, step, 3, (0, 255, 255), -1)
@@ -89,22 +93,28 @@ def main():
                             start = step
                             velocity[0] = -velocity[0]
                     cv.imshow("circle", circled_img)
+                    # Сделать движение к последнем step если цикл закончился через break
+                    if stepcount < 100:
+                        d_x = (img.centers["yellow"] - step)[0]
+                        diff = d_x * pole_movement_k
+                        diff = np.sign(diff) * min(abs(diff), 100)
+                        command = ("topic/speed", str(int(diff)))
 
                 d_y = img.centers["yellow"][1] - img.centers["red"][1]
-                if d_y < 50 and time.time() - kick_timer > 1:
-                    # client.publish("topic/movements", 90)
+                if d_y < 55 and time.time() - kick_timer > 1:           # было d_y < 50
+                    client.publish("topic/movements", 90)
                     kick_timer = time.time()
 
 
 
             if command != last_command:
                     last_command = command
-                    # client.publish(*last_command)
+                    client.publish(*last_command)
 
             while len(memory) >= 10:
                 memory.pop(0)
 
-    # client.publish("topic/speed", "Q")
+    client.publish("topic/speed", "Q")
 
 
 
